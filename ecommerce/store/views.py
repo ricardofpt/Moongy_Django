@@ -1,9 +1,11 @@
 from django.shortcuts import render
 from .models import *
+from django.http import JsonResponse
+import json
 
 def store(request):
     products = Product.objects.all()
-    context = {'products': products}
+    context = {'products': products, 'cartItems': get_cart_items(request)}
     return render(request, "store/store.html", context)
 
 
@@ -25,7 +27,7 @@ def cart(request):
             "get_cart_total": 0,
             "get_cart_items": 0,
         }  # we'll handle this later
-    context = {"items": items, "order": order}
+    context = {"items": items, "order": order, 'cartItems': get_cart_items(request)}
     return render(request, "store/cart.html", context)
 
 
@@ -47,5 +49,49 @@ def checkout(request):
             "get_cart_total": 0,
             "get_cart_items": 0,
         }
-    context = {"items": items, "order": order}
+    context = {"items": items, "order": order, 'cartItems': get_cart_items(request)}
     return render(request, "store/checkout.html", context)
+
+def updateItem(request):
+    response = {
+        "status": False,
+        "msg": '',
+        'cart_items': 0
+    }
+    try:
+        data = json.loads(request.body)
+        product_id = data["productId"]
+        action = data["action"]
+
+        customer = request.user.customer
+        product = Product.objects.get(id=product_id)
+        order, created = Order.objects.get_or_create(customer=customer, complete=False)
+        orderItem, created = OrderItem.objects.get_or_create(order=order, product=product)
+
+        if action == "add":
+            orderItem.quantity += 1
+        if action == "remove":
+            orderItem.quantity -= 1
+
+        orderItem.save()
+
+        if orderItem.quantity <= 0:
+            orderItem.delete()
+
+        response["status"] = True
+        response["msg"] = "Item was added"
+        response["cart_items"] = order.get_cart_items
+    except Exception as e:
+        response["msg"] = e
+
+    return JsonResponse(response, safe=False)
+
+
+def get_cart_items(request):
+    items = 0
+    if request.user.is_authenticated:
+        customer = request.user.customer
+        order, created = Order.objects.get_or_create(customer=customer, complete=False)
+        items = order.get_cart_items
+
+    return items
