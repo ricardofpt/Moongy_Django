@@ -27,6 +27,7 @@ function updateUserOrder(productId, action) {
             if(data.status) {
                 console.log('Data:', data.cart_items)
                 $('#cart-total').text(data.cart_items)
+                location.reload()
             } else {
                 console.log('Data:', data)
             }

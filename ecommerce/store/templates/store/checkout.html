@@ -66,4 +66,76 @@
             </div>
         </div>
     </div>
+    <script type="text/javascript">
+        var user = '{{ request.user }}';
+        var shipping = '{{ order.shipping }}';
+        var total = '{{ order.get_cart_total }}';
+
+        if(user != 'AnonymousUser') {
+            document.getElementById('user-info').innerHTML = ''
+        }
+
+        if (shipping == 'False' && user != 'AnonymousUser') {
+            document.getElementById('form-wrapper').classList.add('hidden')
+            document.getElementById('payment-info').classList.remove('hidden')
+        }
+
+        var form = document.getElementById('form')
+        form.addEventListener('submit', function(e) {
+            e.preventDefault()
+            console.log('Form Submitted..')
+            document.getElementById('form-button').classList.add('hidden')
+            document.getElementById('payment-info').classList.remove('hidden')
+        })
+
+        document.getElementById('make-payment').addEventListener('click', function(e) {
+            submitFormData()
+        })
+
+        function submitFormData() {
+            console.log('Payment button clicked')
+
+            var userFormData = {
+                'name': null,
+                'email': null,
+                'total': total
+            }
+            if (user == 'AnonymousUser') {
+                userFormData.name = form.name.value
+                userFormData.email = form.email.value
+            }
+
+            var shippingFormData = {
+                'address': null,
+                'city': null,
+                'state': null,
+                'zipcode': null
+            }
+            if (shipping != 'False') {
+                shippingFormData.address = form.address.value
+                shippingFormData.city = form.city.value
+                shippingFormData.state = form.state.value
+                shippingFormData.zipcode = form.zipcode.value
+            }
+
+            console.log('Shipping:', shippingFormData)
+            console.log('User:', userFormData)
+
+            var url = '/process_order'
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-type':'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({'form': userFormData, 'shipping': shippingFormData}),
+            })
+            .then((response) => response.json())
+            .then((data) => {
+                console.log('Sucess:', data)
+                alert('Transaction completed!')
+                window.location.href = "{% url 'store' %}"
+            })
+        }
+    </script>
 {% endblock content %}
