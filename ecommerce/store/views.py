@@ -1,12 +1,21 @@
 from django.shortcuts import render
 from .models import *
+from .utils import cookieCart
 from django.http import JsonResponse
 import json
 import datetime
 
 def store(request):
+    if request.user.is_authenticated:
+        customer = request.user.customer
+        order, created = Order.objects.get_or_create(customer=customer, complete=False)
+        cartItems = order.get_cart_items
+    else:
+        cookieData = cookieCart(request)
+        cartItems = cookieData["cartItems"]
+
     products = Product.objects.all()
-    context = {'products': products, 'cartItems': get_cart_items(request)}
+    context = {'products': products, 'cartItems': cartItems}
     return render(request, "store/store.html", context)
 
 
@@ -22,14 +31,14 @@ def cart(request):
         # we can query child objects by setting the parent value (order) 
         # and the child in lowercase (orderitem)
         items = order.orderitem_set.all()
+        cartItems = order.get_cart_items
     else:
-        items = []
-        order = {  # we need to set this to prevent errors when user is not logged in
-            "get_cart_total": 0,
-            "get_cart_items": 0,
-            "shipping": False
-        }
-    context = {"items": items, "order": order, 'cartItems': get_cart_items(request)}
+        cookieData = cookieCart(request)
+        cartItems = cookieData["cartItems"]
+        order = cookieData["order"]
+        items = cookieData["items"]
+
+    context = {"items": items, "order": order, 'cartItems': cartItems}
     return render(request, "store/cart.html", context)
 
 
@@ -45,14 +54,14 @@ def checkout(request):
         # we can query child objects by setting the parent value (order) 
         # and the child in lowercase (orderitem)
         items = order.orderitem_set.all()
+        cartItems = order.get_cart_items
     else:
-        items = []  # we'll handle this later
-        order = {  # we need to set this to prevent errors when user is not logged in
-            "get_cart_total": 0,
-            "get_cart_items": 0,
-            "shipping": False
-        }
-    context = {"items": items, "order": order, 'cartItems': get_cart_items(request)}
+        cookieData = cookieCart(request)
+        cartItems = cookieData["cartItems"]
+        order = cookieData["order"]
+        items = cookieData["items"]
+
+    context = {"items": items, "order": order, 'cartItems': cartItems}
     return render(request, "store/checkout.html", context)
 
 def updateItem(request):
@@ -90,12 +99,15 @@ def updateItem(request):
     return JsonResponse(response, safe=False)
 
 
-def get_cart_items(request):
+def get_cart_items(request, cart={}):
     items = 0
     if request.user.is_authenticated:
         customer = request.user.customer
         order, created = Order.objects.get_or_create(customer=customer, complete=False)
         items = order.get_cart_items
+    else:
+        for i in cart:
+            items += cart[i]["quantity"]
 
     return items
 
