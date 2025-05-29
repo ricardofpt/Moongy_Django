@@ -1,6 +1,52 @@
 import json
 from .models import *
 
+def guestOrder(request):
+    data = json.loads(request.body)
+    name = data["form"]["name"]
+    email = data["form"]["name"]
+
+    cookieData = cookieCart(request)
+    items = cookieData["items"]
+
+    # using the get or create method is cool because this way we know all the orders
+    # made by the same guest,
+    # and if he actually creates an account we'll have all it's previous orders
+    customer, created = Customer.objects.get_or_create(email=email)
+    customer.name = name
+    customer.save()
+
+    order = Order.objects.create(customer=customer, complete=False)
+
+    for item in items:
+        product = Product.objects.get(id=item["product"]["id"])
+
+        orderItem = OrderItem.objects.create(
+            product=product, order=order, quantity=item["quantity"]
+        )
+
+    return customer, order
+
+
+def cartData(request):
+    if request.user.is_authenticated:
+        # get the customer
+        customer = request.user.customer
+        # get the incomplete order, or create a new one
+        order, created = Order.objects.get_or_create(customer=customer, complete=False)
+        # get the order items
+        # we can query child objects by setting the parent value (order) 
+        # and the child in lowercase (orderitem)
+        items = order.orderitem_set.all()
+        cartItems = order.get_cart_items
+    else:
+        cookieData = cookieCart(request)
+        cartItems = cookieData["cartItems"]
+        order = cookieData["order"]
+        items = cookieData["items"]
+
+    return {"items": items, "order": order, 'cartItems': cartItems}
+
 def cookieCart(request):
     try:
         cart = json.loads(request.COOKIES["cart"])

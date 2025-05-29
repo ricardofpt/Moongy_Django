@@ -1,67 +1,35 @@
 from django.shortcuts import render
 from .models import *
-from .utils import cookieCart
+from .utils import cartData, guestOrder
 from django.http import JsonResponse
 import json
 import datetime
 
 def store(request):
-    if request.user.is_authenticated:
-        customer = request.user.customer
-        order, created = Order.objects.get_or_create(customer=customer, complete=False)
-        cartItems = order.get_cart_items
-    else:
-        cookieData = cookieCart(request)
-        cartItems = cookieData["cartItems"]
+    data = cartData(request)
+    cartItems = data["cartItems"]
 
     products = Product.objects.all()
-    context = {'products': products, 'cartItems': cartItems}
+
+    context = {"products": products, "cartItems": cartItems}
     return render(request, "store/store.html", context)
 
-
 def cart(request):
-    # the store will allow purchases whether the visitor is authenticated or not, 
-    # but we have to handle them differently.
-    if request.user.is_authenticated:
-        # get the customer
-        customer = request.user.customer
-        # get the incomplete order, or create a new one
-        order, created = Order.objects.get_or_create(customer=customer, complete=False)
-        # get the order items
-        # we can query child objects by setting the parent value (order) 
-        # and the child in lowercase (orderitem)
-        items = order.orderitem_set.all()
-        cartItems = order.get_cart_items
-    else:
-        cookieData = cookieCart(request)
-        cartItems = cookieData["cartItems"]
-        order = cookieData["order"]
-        items = cookieData["items"]
+    data = cartData(request)
+    cartItems = data["cartItems"]
+    order = data["order"]
+    items = data["items"]
 
-    context = {"items": items, "order": order, 'cartItems': cartItems}
+    context = {"items": items, "order": order, "cartItems": cartItems}
     return render(request, "store/cart.html", context)
 
-
 def checkout(request):
-    # the store will allow purchases whether the visitor is authenticated or not, 
-    # but we have to handle them differently.
-    if request.user.is_authenticated:
-        # get the customer
-        customer = request.user.customer
-        # get the incomplete order, or create a new one
-        order, created = Order.objects.get_or_create(customer=customer, complete=False)
-        # get the order items
-        # we can query child objects by setting the parent value (order) 
-        # and the child in lowercase (orderitem)
-        items = order.orderitem_set.all()
-        cartItems = order.get_cart_items
-    else:
-        cookieData = cookieCart(request)
-        cartItems = cookieData["cartItems"]
-        order = cookieData["order"]
-        items = cookieData["items"]
+    data = cartData(request)
+    cartItems = data["cartItems"]
+    order = data["order"]
+    items = data["items"]
 
-    context = {"items": items, "order": order, 'cartItems': cartItems}
+    context = {"items": items, "order": order, "cartItems": cartItems}
     return render(request, "store/checkout.html", context)
 
 def updateItem(request):
@@ -112,27 +80,30 @@ def get_cart_items(request, cart={}):
     return items
 
 def processOrder(request):
-    transaction_id = datetime.datetime.now().timestamp()
     data = json.loads(request.body)
+    transaction_id = datetime.datetime.now().timestamp()
 
     if request.user.is_authenticated:
         customer = request.user.customer
         order, created = Order.objects.get_or_create(customer=customer, complete=False)
-        total = float(data["form"]["total"])
-        order.transaction_id = transaction_id
+    else:
+        customer, order = guestOrder(request)
 
-        if total == order.get_cart_items:
-            order.complete = True
-        order.save()
+    total = float(data["form"]["total"])
+    order.transaction_id = transaction_id
 
-        if order.shipping:
-            ShippingAddress.objects.create(
-                customer=customer,
-                order=order,
-                address=data["shipping"]["address"],
-                city=data["shipping"]["city"],
-                state=data["shipping"]["state"],
-                zip_code=data["shipping"]["zipcode"],
-            )
+    if total == order.get_cart_items:
+        order.complete = True
+    order.save()
+
+    if order.shipping:
+        ShippingAddress.objects.create(
+            customer=customer,
+            order=order,
+            address=data["shipping"]["address"],
+            city=data["shipping"]["city"],
+            state=data["shipping"]["state"],
+            zip_code=data["shipping"]["zipcode"],
+        )
 
     return JsonResponse('Payment complete!', safe=False)
